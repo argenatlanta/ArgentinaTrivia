@@ -1432,32 +1432,36 @@ let bgTimers    = [];   // setTimeout handles for music scheduling
 
 // Note frequency helpers (Hz)
 const NOTE = {
-  G3:196, C4:261, D4:294, E4:330, F4:349, G4:392,
-  A4:440, B4:494, C5:523, D5:587, E5:659, F5:698, G5:784
+  G2:98, C3:130, D3:147, G3:196, A3:220, Bb3:233,
+  C4:261, D4:294, Eb4:311, G4:392,
+  A4:440, Bb4:466, C5:523, D5:587, Eb5:622, G5:784
 };
 
-// "Muchachos, ahora nos volvimos a ilusionar" — 8-bit melody approximation
+// "Muchachos, ahora nos volvimos a ilusionar" — G minor chorus melody
+// Sourced from actual tab transcriptions: D-D-C-C-C-Eb-D-C-C-Bb-D / Bb-Bb-Bb-D-C-Bb-Bb-A / A-A-Bb-A-Bb-C-D
 // Each entry: [frequencyHz, durationMs]  (0 = rest)
 const MELODY_NOTES = [
-  // Phrase 1 — "Mu-cha-chos, a-ho-ra"
-  [NOTE.G4,200],[NOTE.G4,200],[NOTE.G4,400],[NOTE.A4,200],[NOTE.B4,200],[NOTE.A4,400],[NOTE.G4,800],
-  // Phrase 2 — "nos vol-vi-mos"
-  [NOTE.C5,200],[NOTE.B4,200],[NOTE.A4,400],[NOTE.G4,400],[NOTE.A4,200],[NOTE.G4,200],[NOTE.G4,800],
-  // Phrase 3 — "a i-lu-sio-nar"
-  [NOTE.B4,200],[NOTE.B4,200],[NOTE.C5,400],[NOTE.D5,400],[NOTE.C5,200],[NOTE.B4,200],[NOTE.A4,800],
-  // Phrase 4 — resolution / turnaround
-  [NOTE.A4,200],[NOTE.B4,200],[NOTE.A4,400],[NOTE.G4,400],[NOTE.A4,200],[NOTE.G4,200],[NOTE.G4,1200],
-  // Bridge — slightly different feel
-  [NOTE.D5,200],[NOTE.C5,200],[NOTE.B4,400],[NOTE.A4,200],[NOTE.G4,200],[NOTE.A4,400],[NOTE.G4,800],
-  [NOTE.B4,200],[NOTE.C5,200],[NOTE.B4,400],[NOTE.A4,400],[NOTE.G4,200],[NOTE.A4,200],[NOTE.G4,1600],
+  // Line 1 — "Mu-cha-chos, a-ho-ra nos-vol-vi-mos"
+  [NOTE.D5,250],[NOTE.D5,250],[NOTE.C5,500],
+  [NOTE.C5,250],[NOTE.C5,250],[NOTE.Eb5,500],
+  [NOTE.D5,250],[NOTE.C5,250],[NOTE.C5,250],[NOTE.Bb4,250],[NOTE.D5,500],
+  // Line 2 — "a i-lu-sio-nar"
+  [NOTE.Bb4,250],[NOTE.Bb4,250],[NOTE.Bb4,500],
+  [NOTE.D5,250],[NOTE.C5,250],[NOTE.Bb4,250],[NOTE.Bb4,250],[NOTE.A4,500],
+  // Line 3 — "quiero ganar la tercera"
+  [NOTE.A4,250],[NOTE.A4,250],[NOTE.Bb4,250],[NOTE.A4,250],
+  [NOTE.Bb4,250],[NOTE.C5,250],[NOTE.D5,750],
+  // Resolution — land on tonic before loop
+  [NOTE.Bb4,250],[NOTE.A4,250],[NOTE.G4,750],
+  [0,500],
 ];
 
-// Simple bass line (triangle wave, lower octave)
+// Bass line — Gm → Cm → D7 → Gm root motion (G minor)
 const BASS_NOTES = [
   [NOTE.G3,1000],[NOTE.G3,1000],[NOTE.G3,1000],[NOTE.G3,1000],
-  [NOTE.C4,1000],[NOTE.G3,1000],[NOTE.D4,1000],[NOTE.G3,1000],
-  [NOTE.G3,1000],[NOTE.G3,1000],[NOTE.G3,1000],[NOTE.G3,1000],
-  [NOTE.C4,1000],[NOTE.G3,1000],[NOTE.D4,1000],[NOTE.G3,2000],
+  [NOTE.C3,1000],[NOTE.C3,1000],
+  [NOTE.D3,1000],[NOTE.D3,1000],
+  [NOTE.G3,2000],
 ];
 
 function getAudioCtx() {
