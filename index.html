@@ -618,6 +618,13 @@
 </head>
 <body>
 
+<button id="muteBtn" aria-label="Toggle music" title="Toggle music"
+  style="position:fixed;top:12px;right:12px;z-index:9999;
+         background:rgba(0,0,0,0.45);border:none;border-radius:50%;
+         width:38px;height:38px;font-size:18px;cursor:pointer;color:#fff;
+         display:flex;align-items:center;justify-content:center;
+         box-shadow:0 2px 8px rgba(0,0,0,0.3);">🔊</button>
+
 <div id="app" role="main">
 
   <!-- ═══ CONSULADO LOGO ═══ -->
@@ -1142,6 +1149,8 @@ function handleStart() {
   if (!raw) { nameError.classList.add('show'); playerInput.focus(); return; }
   nameError.classList.remove('show');
   currentPlayer = raw;
+  getAudioCtx();            // initialise AudioContext on user gesture
+  startBackgroundMusic();   // begin 8-bit "Muchachos" loop
   startGame();
 }
 
@@ -1267,6 +1276,8 @@ function selectAnswer(chosenIdx, q) {
 
   const buttons    = optionsGrid.querySelectorAll('.option-btn');
   const isCorrect  = chosenIdx === q.answer;
+
+  if (isCorrect) playDing(); else playDong();
 
   buttons.forEach(b => (b.disabled = true));
   buttons[chosenIdx].classList.add(isCorrect ? 'correct' : 'wrong');
@@ -1409,6 +1420,155 @@ lbPlayBtn.addEventListener('click', () => {               // new player
   stopTimer();
   currentPlayer = ''; playerInput.value = '';
   showScreen('register');
+});
+
+/* ============================================================
+   AUDIO ENGINE — Web Audio API, no external files required
+============================================================ */
+let audioCtx    = null;
+let bgGainNode  = null;
+let isMuted     = false;
+let bgTimers    = [];   // setTimeout handles for music scheduling
+
+// Note frequency helpers (Hz)
+const NOTE = {
+  G3:196, C4:261, D4:294, E4:330, F4:349, G4:392,
+  A4:440, B4:494, C5:523, D5:587, E5:659, F5:698, G5:784
+};
+
+// "Muchachos, ahora nos volvimos a ilusionar" — 8-bit melody approximation
+// Each entry: [frequencyHz, durationMs]  (0 = rest)
+const MELODY_NOTES = [
+  // Phrase 1 — "Mu-cha-chos, a-ho-ra"
+  [NOTE.G4,200],[NOTE.G4,200],[NOTE.G4,400],[NOTE.A4,200],[NOTE.B4,200],[NOTE.A4,400],[NOTE.G4,800],
+  // Phrase 2 — "nos vol-vi-mos"
+  [NOTE.C5,200],[NOTE.B4,200],[NOTE.A4,400],[NOTE.G4,400],[NOTE.A4,200],[NOTE.G4,200],[NOTE.G4,800],
+  // Phrase 3 — "a i-lu-sio-nar"
+  [NOTE.B4,200],[NOTE.B4,200],[NOTE.C5,400],[NOTE.D5,400],[NOTE.C5,200],[NOTE.B4,200],[NOTE.A4,800],
+  // Phrase 4 — resolution / turnaround
+  [NOTE.A4,200],[NOTE.B4,200],[NOTE.A4,400],[NOTE.G4,400],[NOTE.A4,200],[NOTE.G4,200],[NOTE.G4,1200],
+  // Bridge — slightly different feel
+  [NOTE.D5,200],[NOTE.C5,200],[NOTE.B4,400],[NOTE.A4,200],[NOTE.G4,200],[NOTE.A4,400],[NOTE.G4,800],
+  [NOTE.B4,200],[NOTE.C5,200],[NOTE.B4,400],[NOTE.A4,400],[NOTE.G4,200],[NOTE.A4,200],[NOTE.G4,1600],
+];
+
+// Simple bass line (triangle wave, lower octave)
+const BASS_NOTES = [
+  [NOTE.G3,1000],[NOTE.G3,1000],[NOTE.G3,1000],[NOTE.G3,1000],
+  [NOTE.C4,1000],[NOTE.G3,1000],[NOTE.D4,1000],[NOTE.G3,1000],
+  [NOTE.G3,1000],[NOTE.G3,1000],[NOTE.G3,1000],[NOTE.G3,1000],
+  [NOTE.C4,1000],[NOTE.G3,1000],[NOTE.D4,1000],[NOTE.G3,2000],
+];
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
+    bgGainNode = audioCtx.createGain();
+    bgGainNode.gain.value = 0.15;
+    bgGainNode.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playNote(ctx, freq, startSec, durSec, gainNode, waveType) {
+  if (!freq) return;
+  const osc = ctx.createOscillator();
+  const g   = ctx.createGain();
+  osc.type  = waveType || 'square';
+  osc.frequency.value = freq;
+  // Short attack + release to avoid clicks
+  g.gain.setValueAtTime(0, startSec);
+  g.gain.linearRampToValueAtTime(1, startSec + 0.01);
+  g.gain.setValueAtTime(1, startSec + durSec - 0.05);
+  g.gain.linearRampToValueAtTime(0, startSec + durSec);
+  osc.connect(g);
+  g.connect(gainNode);
+  osc.start(startSec);
+  osc.stop(startSec + durSec);
+}
+
+function scheduleMusicLoop(notes, waveType, gainNode) {
+  const ctx = getAudioCtx();
+  let offset = ctx.currentTime + 0.05;
+  const totalMs = notes.reduce((s, n) => s + n[1], 0);
+
+  function playLoop() {
+    let t = ctx.currentTime + 0.05;
+    notes.forEach(([freq, ms]) => {
+      playNote(ctx, freq, t, ms / 1000 * 0.92, gainNode, waveType);
+      t += ms / 1000;
+    });
+    const tid = setTimeout(playLoop, totalMs - 80);
+    bgTimers.push(tid);
+  }
+  playLoop();
+}
+
+function startBackgroundMusic() {
+  if (bgTimers.length) return;          // already running
+  const ctx = getAudioCtx();
+
+  // Melody — square wave (classic 8-bit)
+  const melGain = ctx.createGain();
+  melGain.gain.value = 0.55;
+  melGain.connect(bgGainNode);
+
+  // Bass — triangle wave (warmer, lower)
+  const bassGain = ctx.createGain();
+  bassGain.gain.value = 0.45;
+  bassGain.connect(bgGainNode);
+
+  scheduleMusicLoop(MELODY_NOTES, 'square',   melGain);
+  scheduleMusicLoop(BASS_NOTES,   'triangle', bassGain);
+}
+
+function stopBackgroundMusic() {
+  bgTimers.forEach(clearTimeout);
+  bgTimers = [];
+}
+
+/* ---- Sound effects ---- */
+function playDing() {
+  const ctx = getAudioCtx();
+  // Two ascending tones: A5 (880Hz) then C6 (1046Hz)
+  [880, 1046].forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+    const t   = ctx.currentTime + i * 0.14;
+    osc.type  = 'square';
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.35, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.2);
+  });
+}
+
+function playDong() {
+  const ctx = getAudioCtx();
+  // Low descending buzz: 220Hz → 110Hz over 450ms
+  const osc = ctx.createOscillator();
+  const g   = ctx.createGain();
+  osc.type  = 'sawtooth';
+  osc.frequency.setValueAtTime(220, ctx.currentTime);
+  osc.frequency.linearRampToValueAtTime(110, ctx.currentTime + 0.45);
+  g.gain.setValueAtTime(0.45, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.48);
+  osc.connect(g);
+  g.connect(ctx.destination);
+  osc.start(ctx.currentTime);
+  osc.stop(ctx.currentTime + 0.5);
+}
+
+/* ---- Mute toggle ---- */
+document.getElementById('muteBtn').addEventListener('click', () => {
+  isMuted = !isMuted;
+  if (bgGainNode) bgGainNode.gain.value = isMuted ? 0 : 0.15;
+  document.getElementById('muteBtn').textContent = isMuted ? '🔇' : '🔊';
 });
 </script>
 
