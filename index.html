@@ -689,7 +689,7 @@
       <div class="scoring-banner-body">
         <div class="scoring-banner-title">How scoring works</div>
         <div class="scoring-banner-text">
-          Each question has a <strong>10-second timer</strong>.
+          Each question has a <strong>20-second timer</strong>.
           Your final score combines <strong>correct answers</strong> and <strong>speed</strong> —
           answer faster to earn bonus points. Time running out counts as wrong.
         </div>
@@ -719,7 +719,7 @@
     </div>
 
     <button class="primary-btn" id="start-btn">Let's Play ✓</button>
-    <p class="screen-footer">15 questions · 10 sec each · Speed bonus scoring</p>
+    <p class="screen-footer">15 questions · 20 sec each · Speed bonus scoring</p>
   </section>
 
   <!-- ═══════════════════════════════════════
@@ -748,7 +748,7 @@
             <circle class="timer-ring-fg" id="timer-ring-fg" cx="24" cy="24" r="20"
               stroke-dasharray="125.66" stroke-dashoffset="0"/>
           </svg>
-          <div class="timer-number" id="timer-number" aria-live="polite" aria-label="Time remaining">10</div>
+          <div class="timer-number" id="timer-number" aria-live="polite" aria-label="Time remaining">20</div>
         </div>
         <div class="timer-label-col">
           <div class="timer-label-top">Time remaining</div>
@@ -993,7 +993,7 @@ const QUESTIONS = [
    Max per question: 150 pts
    Max total (15 questions): 2250 pts
 ============================================================ */
-const QUESTION_TIME   = 10;   // seconds per question
+const QUESTION_TIME   = 20;   // seconds per question
 const BASE_PTS        = 100;  // points for a correct answer
 const MAX_SPEED_BONUS = 50;   // max bonus points for speed
 
