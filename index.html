@@ -554,9 +554,38 @@
     .lb-title {
       font-family: 'Playfair Display', serif;
       font-size: clamp(1.35rem, 5vw, 1.85rem); font-weight: 900;
-      color: var(--ink); margin-bottom: 3px;
+      color: var(--ink); margin-bottom: 3px; cursor: default; user-select: none;
     }
     .lb-subtitle { font-size: 0.8rem; color: var(--ink-soft); }
+
+    /* ---- Admin PIN modal ---- */
+    .pin-overlay {
+      position: fixed; inset: 0; z-index: 999;
+      background: rgba(13,27,42,0.55); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      animation: fadeUp 0.2s ease both;
+    }
+    .pin-overlay.hidden { display: none; }
+    .pin-card {
+      background: var(--white); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card); padding: 28px 24px;
+      width: min(340px, 90vw); text-align: center;
+    }
+    .pin-card h3 {
+      font-family: 'Playfair Display', serif; font-size: 1.2rem;
+      font-weight: 900; margin-bottom: 6px; color: var(--ink);
+    }
+    .pin-card p { font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 18px; }
+    .pin-input {
+      width: 100%; border: 2px solid rgba(116,170,223,0.4);
+      border-radius: var(--radius-md); padding: 13px 16px;
+      font-size: 1.4rem; font-weight: 700; letter-spacing: 0.35em;
+      text-align: center; color: var(--ink); background: var(--off-white);
+      font-family: 'DM Sans', sans-serif; margin-bottom: 10px;
+    }
+    .pin-input:focus { outline: none; border-color: var(--sky-deep); }
+    .pin-error { font-size: 0.8rem; color: var(--wrong); margin-bottom: 12px; min-height: 1.1em; }
+    .pin-actions { display: flex; gap: 10px; }
 
     .lb-card {
       background: var(--white); border-radius: var(--radius-lg);
@@ -846,7 +875,7 @@
   <section id="leaderboard-screen" class="screen leaderboard-screen hidden" aria-label="Leaderboard">
     <div class="lb-title-wrap">
       <div class="results-icon" aria-hidden="true">🏅</div>
-      <h2 class="lb-title">Leaderboard</h2>
+      <h2 class="lb-title" id="lb-title">Leaderboard</h2>
       <p class="lb-subtitle">All players who finished · Ranked by final score (speed counts!)</p>
     </div>
 
@@ -855,6 +884,20 @@
     <div class="results-actions">
       <button class="secondary-btn" id="lb-play-btn">↺ Play Again (New Player)</button>
     </div>
+
+  <!-- Admin PIN overlay -->
+  <div id="pin-overlay" class="pin-overlay hidden" role="dialog" aria-modal="true">
+    <div class="pin-card">
+      <h3>🔐 Reset Leaderboard</h3>
+      <p>Ingresá el PIN de administrador para limpiar el ranking</p>
+      <input id="pin-input" class="pin-input" type="password" inputmode="numeric" maxlength="6" placeholder="······" autocomplete="off" />
+      <div id="pin-error" class="pin-error"></div>
+      <div class="pin-actions">
+        <button class="secondary-btn" id="pin-cancel">Cancelar</button>
+        <button class="primary-btn" id="pin-confirm">Resetear</button>
+      </div>
+    </div>
+  </div>
     <p class="screen-footer" style="margin-top:14px;">🇦🇷 Consulado General de la República Argentina</p>
   </section>
 
@@ -1030,6 +1073,9 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+const ADMIN_PIN = '090786';
+let resetAt = 0;
+
 async function saveToFirestore(entry) {
   const docRef = await db.collection('leaderboard').add(entry);
   myDocId = docRef.id;
@@ -1043,6 +1089,19 @@ async function loadFromFirestore() {
   const snapshot = await Promise.race([query, timeout]);
   const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   return docs.sort((a, b) => b.pts - a.pts || a.timeMs - b.timeMs);
+}
+
+async function loadResetAt() {
+  try {
+    const doc = await db.collection('config').doc('leaderboard').get();
+    return doc.exists ? (doc.data().resetAt || 0) : 0;
+  } catch { return 0; }
+}
+
+async function resetLeaderboard() {
+  const now = Date.now();
+  await db.collection('config').doc('leaderboard').set({ resetAt: now });
+  resetAt = now;
 }
 
 /* ============================================================
@@ -1394,7 +1453,8 @@ async function renderLeaderboard() {
 
   let lb;
   try {
-    lb = await loadFromFirestore();
+    resetAt = await loadResetAt();
+    lb = (await loadFromFirestore()).filter(e => e.ts > resetAt);
   } catch (err) {
     con.innerHTML = `<div class="lb-empty"><span class="lb-empty-icon">⚠️</span>Error al cargar: ${err.message}</div>`;
     return;
@@ -1435,6 +1495,48 @@ async function renderLeaderboard() {
       <tbody>${rows}</tbody>
     </table>`;
 }
+
+/* ============================================================
+   ADMIN PIN MODAL
+============================================================ */
+const pinOverlay = document.getElementById('pin-overlay');
+const pinInput   = document.getElementById('pin-input');
+const pinError   = document.getElementById('pin-error');
+
+function showPinOverlay() {
+  pinInput.value = '';
+  pinError.textContent = '';
+  pinOverlay.classList.remove('hidden');
+  setTimeout(() => pinInput.focus(), 50);
+}
+
+function hidePinOverlay() { pinOverlay.classList.add('hidden'); }
+
+async function confirmReset() {
+  if (pinInput.value !== ADMIN_PIN) {
+    pinError.textContent = 'PIN incorrecto';
+    pinInput.value = '';
+    pinInput.focus();
+    return;
+  }
+  hidePinOverlay();
+  await resetLeaderboard();
+  renderLeaderboard();
+}
+
+document.getElementById('pin-cancel').addEventListener('click', hidePinOverlay);
+document.getElementById('pin-confirm').addEventListener('click', confirmReset);
+pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') confirmReset(); });
+pinOverlay.addEventListener('click', e => { if (e.target === pinOverlay) hidePinOverlay(); });
+
+/* Triple-click on "Leaderboard" title to open admin modal */
+let titleClicks = 0, titleClickTimer = null;
+document.getElementById('lb-title').addEventListener('click', () => {
+  titleClicks++;
+  clearTimeout(titleClickTimer);
+  titleClickTimer = setTimeout(() => { titleClicks = 0; }, 600);
+  if (titleClicks >= 3) { titleClicks = 0; showPinOverlay(); }
+});
 
 /* ============================================================
    EVENT LISTENERS
