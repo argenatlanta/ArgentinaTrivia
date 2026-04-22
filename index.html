@@ -1036,11 +1036,12 @@ async function saveToFirestore(entry) {
 }
 
 async function loadFromFirestore() {
-  const snapshot = await db.collection('leaderboard')
-    .orderBy('pts', 'desc')
-    .get();
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Timeout: no se pudo conectar con Firestore (verificá las reglas de seguridad)')), 8000)
+  );
+  const query = db.collection('leaderboard').orderBy('pts', 'desc').get();
+  const snapshot = await Promise.race([query, timeout]);
   const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  // Sort ties by fastest time client-side (no composite index needed)
   return docs.sort((a, b) => b.pts - a.pts || a.timeMs - b.timeMs);
 }
 
