@@ -1074,8 +1074,13 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-const ADMIN_PIN = '090786';
+const ADMIN_HASH = '497c0e662c7916aaaa841fdde021ff7b8ad963d6818761de842a85c29d2e32db';
 let resetAt = 0;
+
+async function hashPin(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 async function saveToFirestore(entry) {
   const docRef = await db.collection('leaderboard').add(entry);
@@ -1515,7 +1520,8 @@ function showPinOverlay() {
 function hidePinOverlay() { pinOverlay.classList.add('hidden'); }
 
 async function confirmReset() {
-  if (pinInput.value !== ADMIN_PIN) {
+  const entered = await hashPin(pinInput.value);
+  if (entered !== ADMIN_HASH) {
     pinError.textContent = 'PIN incorrecto';
     pinInput.value = '';
     pinInput.focus();
