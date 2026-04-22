@@ -1037,10 +1037,11 @@ async function saveToFirestore(entry) {
 
 async function loadFromFirestore() {
   const snapshot = await db.collection('leaderboard')
-    .orderBy('pts',    'desc')
-    .orderBy('timeMs', 'asc')
+    .orderBy('pts', 'desc')
     .get();
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  // Sort ties by fastest time client-side (no composite index needed)
+  return docs.sort((a, b) => b.pts - a.pts || a.timeMs - b.timeMs);
 }
 
 /* ============================================================
@@ -1390,7 +1391,13 @@ async function renderLeaderboard() {
   const con = document.getElementById('lb-content');
   con.innerHTML = `<div class="lb-empty"><span class="lb-empty-icon">⏳</span>Loading results…</div>`;
 
-  const lb = await loadFromFirestore();
+  let lb;
+  try {
+    lb = await loadFromFirestore();
+  } catch (err) {
+    con.innerHTML = `<div class="lb-empty"><span class="lb-empty-icon">⚠️</span>Error al cargar: ${err.message}</div>`;
+    return;
+  }
 
   if (!lb.length) {
     con.innerHTML = `<div class="lb-empty"><span class="lb-empty-icon">📋</span>No players yet — be the first!</div>`;
