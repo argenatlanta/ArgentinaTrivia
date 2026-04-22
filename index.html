@@ -8,6 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
   <style>
     /* ============================================================
@@ -1011,10 +1014,34 @@ let timeLeft       = QUESTION_TIME;
 let questionStartMs = 0;  // ms timestamp when question shown
 let totalTimeMs    = 0;   // cumulative ms spent across questions
 let totalPoints    = 0;   // accumulated final score
+let myDocId        = null; // Firestore doc ID for the current player's entry
 
-/* Leaderboard in sessionStorage */
-function loadLB() { try { return JSON.parse(sessionStorage.getItem('arg_trivia_lb5') || '[]'); } catch { return []; } }
-function saveLB(lb) { try { sessionStorage.setItem('arg_trivia_lb5', JSON.stringify(lb)); } catch {} }
+/* ============================================================
+   FIREBASE / FIRESTORE
+============================================================ */
+const firebaseConfig = {
+  apiKey:            "AIzaSyC5Oa5R6NuBKRcwUopIwaPIp6HF1lDMV7k",
+  authDomain:        "argentinatrivia-a6898.firebaseapp.com",
+  projectId:         "argentinatrivia-a6898",
+  storageBucket:     "argentinatrivia-a6898.firebasestorage.app",
+  messagingSenderId: "628410102953",
+  appId:             "1:628410102953:web:30e8e834479efa861225b8"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+async function saveToFirestore(entry) {
+  const docRef = await db.collection('leaderboard').add(entry);
+  myDocId = docRef.id;
+}
+
+async function loadFromFirestore() {
+  const snapshot = await db.collection('leaderboard')
+    .orderBy('pts',    'desc')
+    .orderBy('timeMs', 'asc')
+    .get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
 
 /* ============================================================
    DOM REFS
@@ -1323,12 +1350,11 @@ function finishGame() {
   const pct     = Math.round((correctCount / total) * 100);
   const maxPts  = total * (BASE_PTS + MAX_SPEED_BONUS);
 
-  /* Save entry */
-  const lb = loadLB();
-  lb.push({ name: currentPlayer, correct: correctCount, total, pct, timeMs: totalTimeMs, pts: totalPoints, ts: Date.now() });
-  saveLB(lb);
-
   showScreen('results');
+
+  /* Save entry to Firestore (non-blocking — UI shows immediately) */
+  myDocId = null;
+  saveToFirestore({ name: currentPlayer, correct: correctCount, total, pct, timeMs: totalTimeMs, pts: totalPoints, ts: Date.now() });
 
   /* Hero */
   document.getElementById('final-pts').textContent    = totalPoints;
@@ -1360,26 +1386,23 @@ function finishGame() {
 /* ============================================================
    LEADERBOARD
 ============================================================ */
-function renderLeaderboard() {
-  const lb  = loadLB();
+async function renderLeaderboard() {
   const con = document.getElementById('lb-content');
+  con.innerHTML = `<div class="lb-empty"><span class="lb-empty-icon">⏳</span>Loading results…</div>`;
+
+  const lb = await loadFromFirestore();
 
   if (!lb.length) {
     con.innerHTML = `<div class="lb-empty"><span class="lb-empty-icon">📋</span>No players yet — be the first!</div>`;
     return;
   }
 
-  /* Sort by pts desc, then fastest time for ties */
-  const sorted = [...lb].sort((a, b) => b.pts - a.pts || a.timeMs - b.timeMs);
   const medals = ['🥇','🥈','🥉'];
 
-  /* Find the last entry belonging to currentPlayer to tag 'you' */
-  const myEntry = [...lb].filter(e => e.name === currentPlayer).sort((a,b) => b.ts - a.ts)[0];
-
-  const rows = sorted.map((e, i) => {
+  const rows = lb.map((e, i) => {
     const rank = i + 1;
     const rankCell = rank <= 3 ? `<span class="rank-medal">${medals[i]}</span>` : `<span style="color:var(--ink-soft);font-size:0.76rem;font-weight:700;">#${rank}</span>`;
-    const isYou  = myEntry && e.ts === myEntry.ts && e.name === myEntry.name;
+    const isYou  = myDocId && e.id === myDocId;
     const youTag = isYou ? `<span class="lb-you-tag">▶ you</span>` : '';
     const scoreChipCls = rank === 1 ? 'lb-chip lb-chip-score gold' : 'lb-chip lb-chip-score';
     const ptsCls       = rank === 1 ? 'lb-chip lb-chip-pts gold'   : 'lb-chip lb-chip-pts';
@@ -1415,10 +1438,10 @@ playerInput.addEventListener('keydown', e => {
 });
 nextBtn.addEventListener('click', goNext);
 replayBtn.addEventListener('click', () => startGame());   // same player, new game
-lbBtn.addEventListener('click', () => { renderLeaderboard(); showScreen('leaderboard'); });
+lbBtn.addEventListener('click', () => { showScreen('leaderboard'); renderLeaderboard(); });
 lbPlayBtn.addEventListener('click', () => {               // new player
   stopTimer();
-  currentPlayer = ''; playerInput.value = '';
+  myDocId = null; currentPlayer = ''; playerInput.value = '';
   showScreen('register');
 });
 
