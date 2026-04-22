@@ -751,6 +751,7 @@
     </div>
 
     <button class="primary-btn" id="start-btn">Let's Play ✓</button>
+    <button class="secondary-btn" id="home-lb-btn" style="margin-top:10px;">🏅 Ver Leaderboard</button>
     <p class="screen-footer">15 questions · 20 sec each · Speed bonus scoring</p>
   </section>
 
@@ -1115,6 +1116,7 @@ const lbScreen       = document.getElementById('leaderboard-screen');
 const playerInput    = document.getElementById('player-name-input');
 const nameError      = document.getElementById('name-error');
 const startBtn       = document.getElementById('start-btn');
+const homeLbBtn      = document.getElementById('home-lb-btn');
 const nextBtn        = document.getElementById('next-btn');
 const replayBtn      = document.getElementById('replay-btn');
 const lbBtn          = document.getElementById('leaderboard-btn');
@@ -1548,7 +1550,8 @@ playerInput.addEventListener('keydown', e => {
 });
 nextBtn.addEventListener('click', goNext);
 replayBtn.addEventListener('click', () => startGame());   // same player, new game
-lbBtn.addEventListener('click', () => { showScreen('leaderboard'); renderLeaderboard(); });
+lbBtn.addEventListener('click',     () => { showScreen('leaderboard'); renderLeaderboard(); });
+homeLbBtn.addEventListener('click', () => { showScreen('leaderboard'); renderLeaderboard(); });
 lbPlayBtn.addEventListener('click', () => {               // new player
   stopTimer();
   myDocId = null; currentPlayer = ''; playerInput.value = '';
